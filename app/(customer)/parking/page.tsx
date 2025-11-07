@@ -1,11 +1,11 @@
-import React from 'react'
-
+"use client"
+import Parking from './_components/parking'
 export default function Page() {
-  return (
-    <div>
-      <h1>Parking</h1>
-    </div>
-  )
+    return (
+        <>
+            <Parking />
+        </>
+    )
 }
 
 
