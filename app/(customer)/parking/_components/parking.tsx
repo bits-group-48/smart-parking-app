@@ -32,7 +32,7 @@ const Parking = () => {
       
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Available Parking Spots</h1>
+          <h4 className="text-3xl font-bold mb-2">Available Parking Spots</h4>
         </div>
 
         {/* Filters */}
