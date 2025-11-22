@@ -82,7 +82,7 @@ const HomeIntro = () => {
               Ready to Park Smarter?
             </h2>
             <p className="text-lg mb-8 opacity-90 max-w-2xl mx-auto">
-              Create the account by clicking below
+              Create the account instantly by clicking below
             </p>
             <Button size="lg" variant="secondary" asChild className="text-lg px-8">
               <Link href="/auth">Create Free Account</Link>

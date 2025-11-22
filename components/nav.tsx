@@ -17,6 +17,7 @@ export const Navbar = () => {
     { path: "/dashboard", label: "Dashboard" },
     { path: "/parking", label: "Parking" },
     { path: "/bookings", label: "My Bookings" },
+    { path: "/admin", label: "Admin" },
   ];
 
   return (
