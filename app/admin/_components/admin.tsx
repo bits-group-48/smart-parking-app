@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +10,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, ParkingSquare, TrendingUp, Activity, Plus } from "lucide-react";
+import { toast } from "sonner";
 
+export type ParkingStatus = "available" | "occupied" | "reserved";
+
+export interface ParkingSpot {
+  id: string;
+  slotNumber: string;
+  status: ParkingStatus;
+  floor: number;
+  section: string;
+  rate: number; // per hour
+  sensor: {
+    temperature: number;
+    humidity: number;
+    lastUpdate: string;
+  };
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  registeredDate: string;
+  totalBookings: number;
+  status: "active" | "inactive";
+}
 
 const Admin = () => {
-  const [users] = useState(mockUsers);
-  const [parkingSpots, setParkingSpots] = useState(mockParkingSpots);
+  const [users, setUsers] = useState<User[]>([]);
+  const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   
   const [newSpot, setNewSpot] = useState({
@@ -26,40 +55,112 @@ const Admin = () => {
     rate: ""
   });
 
-  const handleAddSpot = () => {
-    if (!newSpot.slotNumber || !newSpot.rate) {
-    }
-
-    const spot: ParkingSpot = {
-      id: `P${parkingSpots.length + 1}`,
-      slotNumber: newSpot.slotNumber,
-      floor: parseInt(newSpot.floor),
-      section: newSpot.section,
-      status: newSpot.status,
-      rate: parseInt(newSpot.rate),
-      sensor: {
-        temperature: 25,
-        humidity: 45,
-        lastUpdate: new Date().toISOString()
+  // Fetch parking spots from API
+  useEffect(() => {
+    const fetchParkingSpots = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch("/api/parking");
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          setParkingSpots(data.data);
+        } else {
+          toast.error(data.error || "Failed to load parking spots");
+        }
+      } catch (error: any) {
+        console.error("Error fetching parking spots:", error);
+        toast.error("Failed to load parking spots");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    setParkingSpots([...parkingSpots, spot]);
-    setIsAddDialogOpen(false);
-    setNewSpot({
-      slotNumber: "",
-      floor: "1",
-      section: "A",
-      status: "available",
-      rate: ""
-    });
-    
+    fetchParkingSpots();
+  }, []);
+
+  // Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setIsLoadingUsers(true);
+        const response = await fetch("/api/users");
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          setUsers(data.data);
+        } else {
+          toast.error(data.error || "Failed to load users");
+        }
+      } catch (error: any) {
+        console.error("Error fetching users:", error);
+        toast.error("Failed to load users");
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  const handleAddSpot = async () => {
+    if (!newSpot.slotNumber || !newSpot.rate) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch("/api/parking", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          slotNumber: newSpot.slotNumber,
+          floor: parseInt(newSpot.floor),
+          section: newSpot.section,
+          status: newSpot.status,
+          rate: parseFloat(newSpot.rate),
+          temperature: 25,
+          humidity: 45,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success("Parking spot added successfully");
+        // Refresh the parking spots list
+        const refreshResponse = await fetch("/api/parking");
+        const refreshData = await refreshResponse.json();
+        if (refreshResponse.ok && refreshData.success) {
+          setParkingSpots(refreshData.data);
+        }
+        setIsAddDialogOpen(false);
+        setNewSpot({
+          slotNumber: "",
+          floor: "1",
+          section: "A",
+          status: "available",
+          rate: ""
+        });
+      } else {
+        toast.error(data.error || "Failed to add parking spot");
+      }
+    } catch (error: any) {
+      console.error("Error adding parking spot:", error);
+      toast.error("Failed to add parking spot");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const activeUsers = users.filter(u => u.status === "active").length;
   const totalBookings = users.reduce((sum, u) => sum + u.totalBookings, 0);
   const availableSpots = parkingSpots.filter(s => s.status === "available").length;
   const occupiedSpots = parkingSpots.filter(s => s.status === "occupied").length;
+  const reservedSpots = parkingSpots.filter(s => s.status === "reserved").length;
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
@@ -118,7 +219,9 @@ const Admin = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {Math.round((occupiedSpots / parkingSpots.length) * 100)}%
+                {parkingSpots.length > 0 
+                  ? Math.round(((occupiedSpots + reservedSpots) / parkingSpots.length) * 100)
+                  : 0}%
               </div>
               <p className="text-xs text-muted-foreground">
                 Current
@@ -143,37 +246,51 @@ const Admin = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Registered</TableHead>
-                      <TableHead className="text-center">Bookings</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.phone}</TableCell>
-                        <TableCell>{new Date(user.registeredDate).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-center">{user.totalBookings}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={user.status === "active" ? "default" : "secondary"}
-                            className={user.status === "active" ? "bg-success" : ""}
-                          >
-                            {user.status}
-                          </Badge>
-                        </TableCell>
+                {isLoadingUsers ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading users...</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Registered</TableHead>
+                        <TableHead className="text-center">Bookings</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {users.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No users found.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        users.map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell className="font-medium">{user.name}</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>{user.phone}</TableCell>
+                            <TableCell>{new Date(user.registeredDate).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-center">{user.totalBookings}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={user.status === "active" ? "default" : "secondary"}
+                                className={user.status === "active" ? "bg-success" : ""}
+                              >
+                                {user.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -271,8 +388,12 @@ const Admin = () => {
                             onChange={(e) => setNewSpot({ ...newSpot, rate: e.target.value })}
                           />
                         </div>
-                        <Button onClick={handleAddSpot} className="w-full">
-                          Add Parking Spot
+                        <Button 
+                          onClick={handleAddSpot} 
+                          className="w-full"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? "Adding..." : "Add Parking Spot"}
                         </Button>
                       </div>
                     </DialogContent>
@@ -280,53 +401,67 @@ const Admin = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Spot Number</TableHead>
-                      <TableHead>Floor</TableHead>
-                      <TableHead>Section</TableHead>
-                      <TableHead>Sensor Status</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Rate/Hour</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parkingSpots.map((spot) => (
-                      <TableRow key={spot.id}>
-                        <TableCell className="font-medium">{spot.slotNumber}</TableCell>
-                        <TableCell>Floor {spot.floor}</TableCell>
-                        <TableCell>Section {spot.section}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="border-success text-success">
-                            Active
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              spot.status === "available"
-                                ? "default"
-                                : spot.status === "occupied"
-                                ? "secondary"
-                                : "destructive"
-                            }
-                            className={
-                              spot.status === "available"
-                                ? "bg-success"
-                                : spot.status === "occupied"
-                                ? "bg-warning"
-                                : ""
-                            }
-                          >
-                            {spot.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">₹{spot.rate}</TableCell>
+                {isLoading ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading parking spots...</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Spot Number</TableHead>
+                        <TableHead>Floor</TableHead>
+                        <TableHead>Section</TableHead>
+                        <TableHead>Sensor Status</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Rate/Hour</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {parkingSpots.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No parking spots found. Add your first parking spot!
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        parkingSpots.map((spot) => (
+                          <TableRow key={spot.id}>
+                            <TableCell className="font-medium">{spot.slotNumber}</TableCell>
+                            <TableCell>Floor {spot.floor}</TableCell>
+                            <TableCell>Section {spot.section}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="border-success text-success">
+                                Active
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  spot.status === "available"
+                                    ? "default"
+                                    : spot.status === "occupied"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                                className={
+                                  spot.status === "available"
+                                    ? "bg-success"
+                                    : spot.status === "occupied"
+                                    ? "bg-warning"
+                                    : ""
+                                }
+                              >
+                                {spot.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">₹{spot.rate}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -337,223 +472,8 @@ const Admin = () => {
   );
 };
 
-export interface User {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    registeredDate: string;
-    totalBookings: number;
-    status: "active" | "inactive";
-  }
-  
-  export const mockUsers: User[] = [
-    {
-      id: "1",
-      name: "Prijith ",
-      email: "prijith@gmail.com",
-      phone: "+91 98765 43210",
-      registeredDate: "2024-01-15",
-      totalBookings: 24,
-      status: "active",
-    },
-    {
-      id: "2",
-      name: "Navya",
-      email: "navya@gmail.com",
-      phone: "+91 98765 43211",
-      registeredDate: "2024-02-20",
-      totalBookings: 18,
-      status: "active",
-    },
-    {
-      id: "3",
-      name: "Naveen",
-      email: "naveen.@gmail.com",
-      phone: "+91 98765 43212",
-      registeredDate: "2024-03-10",
-      totalBookings: 32,
-      status: "active",
-    },
-    {
-      id: "4",
-      name: "Jasper",
-      email: "Jasper@gmail.com",
-      phone: "+91 98765 43213",
-      registeredDate: "2024-01-25",
-      totalBookings: 15,
-      status: "inactive",
-    },
-    {
-      id: "5",
-      name: "Jahnavi",
-      email: "Jahnavi@gmail.com",
-      phone: "+91 98765 43214",
-      registeredDate: "2024-02-05",
-      totalBookings: 28,
-      status: "active",
-    },
-
-  ];
 
 
 
-  export interface ParkingSpot {
-    id: string;
-    slotNumber: string;
-    status: ParkingStatus;
-    floor: number;
-    section: string;
-    rate: number; // per hour
-    sensor: {
-      temperature: number;
-      humidity: number;
-      lastUpdate: string;
-    };
-  }
-
-  export type ParkingStatus = "available" | "occupied" | "reserved";
-
-export interface ParkingSpot {
-  id: string;
-  slotNumber: string;
-  status: ParkingStatus;
-  floor: number;
-  section: string;
-  rate: number; // per hour
-  sensor: {
-    temperature: number;
-    humidity: number;
-    lastUpdate: string;
-  };
-}
-
-export interface Booking {
-  id: string;
-  spotId: string;
-  slotNumber: string;
-  userId: string;
-  vehicleNumber: string;
-  startTime: string;
-  endTime: string;
-  duration: number; // hours
-  totalCost: number;
-  status: "active" | "completed" | "cancelled";
-}
-
-// Mock parking spots data
-export const mockParkingSpots: ParkingSpot[] = [
-  // Floor 1, Section A
-  ...Array.from({ length: 10 }, (_, i) => ({
-    id: `spot-1a-${i + 1}`,
-    slotNumber: `A${String(i + 1).padStart(2, "0")}`,
-    status: (i % 3 === 0 ? "occupied" : i % 5 === 0 ? "reserved" : "available") as ParkingStatus,
-    floor: 1,
-    section: "A",
-    rate: 5,
-    sensor: {
-      temperature: 22 + Math.random() * 3,
-      humidity: 45 + Math.random() * 10,
-      lastUpdate: new Date().toISOString(),
-    },
-  })),
-  // Floor 1, Section B
-  ...Array.from({ length: 10 }, (_, i) => ({
-    id: `spot-1b-${i + 1}`,
-    slotNumber: `B${String(i + 1).padStart(2, "0")}`,
-    status: (i % 4 === 0 ? "occupied" : i % 6 === 0 ? "reserved" : "available") as ParkingStatus,
-    floor: 1,
-    section: "B",
-    rate: 5,
-    sensor: {
-      temperature: 22 + Math.random() * 3,
-      humidity: 45 + Math.random() * 10,
-      lastUpdate: new Date().toISOString(),
-    },
-  })),
-  // Floor 2, Section A
-  ...Array.from({ length: 10 }, (_, i) => ({
-    id: `spot-2a-${i + 1}`,
-    slotNumber: `A${String(i + 1).padStart(2, "0")}`,
-    status: (i % 5 === 0 ? "occupied" : i % 7 === 0 ? "reserved" : "available") as ParkingStatus,
-    floor: 2,
-    section: "A",
-    rate: 4,
-    sensor: {
-      temperature: 21 + Math.random() * 3,
-      humidity: 45 + Math.random() * 10,
-      lastUpdate: new Date().toISOString(),
-    },
-  })),
-  // Floor 2, Section B
-  ...Array.from({ length: 10 }, (_, i) => ({
-    id: `spot-2b-${i + 1}`,
-    slotNumber: `B${String(i + 1).padStart(2, "0")}`,
-    status: (i % 3 === 0 ? "occupied" : "available") as ParkingStatus,
-    floor: 2,
-    section: "B",
-    rate: 4,
-    sensor: {
-      temperature: 21 + Math.random() * 3,
-      humidity: 45 + Math.random() * 10,
-      lastUpdate: new Date().toISOString(),
-    },
-  })),
-];
-
-// Mock bookings data
-export const mockBookings: Booking[] = [
-  {
-    id: "booking-1",
-    spotId: "spot-1a-1",
-    slotNumber: "A01",
-    userId: "user-1",
-    vehicleNumber: "ABC-1234",
-    startTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    duration: 4,
-    totalCost: 20,
-    status: "active",
-  },
-  {
-    id: "booking-2",
-    spotId: "spot-1b-5",
-    slotNumber: "B05",
-    userId: "user-1",
-    vehicleNumber: "XYZ-5678",
-    startTime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
-    duration: 4,
-    totalCost: 20,
-    status: "completed",
-  },
-  {
-    id: "booking-3",
-    spotId: "spot-2a-3",
-    slotNumber: "A03",
-    userId: "user-1",
-    vehicleNumber: "ABC-1234",
-    startTime: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 46 * 60 * 60 * 1000).toISOString(),
-    duration: 2,
-    totalCost: 8,
-    status: "completed",
-  },
-];
-
-export const getParkingStats = () => {
-  const total = mockParkingSpots.length;
-  const available = mockParkingSpots.filter((s) => s.status === "available").length;
-  const occupied = mockParkingSpots.filter((s) => s.status === "occupied").length;
-  const reserved = mockParkingSpots.filter((s) => s.status === "reserved").length;
-
-  return {
-    total,
-    available,
-    occupied,
-    reserved,
-    occupancyRate: ((occupied + reserved) / total) * 100,
-  };
-};
 
 export default Admin;

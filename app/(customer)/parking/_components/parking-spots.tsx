@@ -2,7 +2,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {  ParkingSpotType } from "@/data/mockParkingData";
+import { ParkingSpotType } from "./parking";
 import { Car, Thermometer, Droplets } from "lucide-react";
 
 interface ParkingSpotProps {

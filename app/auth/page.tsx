@@ -7,25 +7,92 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Car } from "lucide-react";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Placeholder for Auth0 integration
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("signin-email") as string;
+    const password = formData.get("signin-password") as string;
 
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        toast.error(result.error || "Failed to sign in");
+        setIsLoading(false);
+      } else if (result?.ok) {
+        toast.success("Signed in successfully");
+        router.push("/");
+        router.refresh();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred");
+      setIsLoading(false);
+    }
   };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Placeholder for Auth0 integration
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get("signup-name") as string;
+    const email = formData.get("signup-email") as string;
+    const mobile = formData.get("signup-phone") as string;
+    const vehicleNum = formData.get("signup-vehicle") as string;
+    const password = formData.get("signup-password") as string;
+    const confirmPassword = formData.get("signup-confirm") as string;
 
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          mobile,
+          vehicleNum,
+          password,
+          confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || "Failed to create account");
+        setIsLoading(false);
+        return;
+      }
+
+      toast.success("Account created successfully! Please sign in.");
+      setIsLoading(false);
+      
+      // Switch to sign in tab after successful signup
+      const signInTab = document.querySelector('[value="signin"]') as HTMLElement;
+      if (signInTab) {
+        signInTab.click();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -59,7 +126,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signin-email">Email</Label>
                     <Input
-                      id="signin-email"
+                      name="signin-email"
                       type="email"
                       placeholder="you@example.com"
                       required
@@ -68,7 +135,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signin-password">Password</Label>
                     <Input
-                      id="signin-password"
+                      name="signin-password"
                       type="password"
                       placeholder="••••••••"
                       required
@@ -85,7 +152,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Full Name</Label>
                     <Input
-                      id="signup-name"
+                      name="signup-name"
                       type="text"
                       placeholder="John Doe"
                       required
@@ -94,7 +161,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <Input
-                      id="signup-email"
+                      name="signup-email"
                       type="email"
                       placeholder="you@example.com"
                       required
@@ -103,7 +170,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-phone">Phone Number</Label>
                     <Input
-                      id="signup-phone"
+                      name="signup-phone"
                       type="tel"
                       placeholder="+1 (555) 000-0000"
                       required
@@ -112,7 +179,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-vehicle">Vehicle Number</Label>
                     <Input
-                      id="signup-vehicle"
+                      name="signup-vehicle"
                       type="text"
                       placeholder="ABC-1234"
                       required
@@ -121,7 +188,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
                     <Input
-                      id="signup-password"
+                      name="signup-password"
                       type="password"
                       placeholder="••••••••"
                       required
@@ -130,7 +197,7 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-confirm">Confirm Password</Label>
                     <Input
-                      id="signup-confirm"
+                      name="signup-confirm"
                       type="password"
                       placeholder="••••••••"
                       required
@@ -143,9 +210,6 @@ const Auth = () => {
               </TabsContent>
             </Tabs>
 
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              <p>Auth0 integration ready - connect your credentials</p>
-            </div>
           </CardContent>
         </Card>
       </div>

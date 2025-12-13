@@ -1,12 +1,10 @@
 import mongoose from "mongoose";
-import { type } from "os";
-import { boolean } from "zod";
 
 const userSchema = new mongoose.Schema({
     userId: {
         type: String,
-        required: [true, "userId is required"],
-        unique:true
+        unique: true,
+        sparse: true // Allows null/undefined values while maintaining uniqueness
     },
     name: {
         type: String,
@@ -18,7 +16,8 @@ const userSchema = new mongoose.Schema({
     },
     email:{
         type:String,
-        required:[true,"Email is required"]
+        required:[true,"Email is required"],
+        unique: true
     },
     vehicleNum:{
         type:String,
@@ -26,8 +25,11 @@ const userSchema = new mongoose.Schema({
     },
     password:{
         type:String,
-        required:[true,"Passwrod is required" ]
-    }
+        required:[true,"Password is required" ]
+    },
+    slots:[]
+}, {
+    timestamps: true // Adds createdAt and updatedAt fields automatically
 })
 
 export default mongoose.models.user||mongoose.model("user",userSchema,'users');
