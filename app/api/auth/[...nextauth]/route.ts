@@ -2,6 +2,7 @@ import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { connect } from "@/lib/db-config";
 import User from "@/schema/userModel";
+import Admin from "@/schema/adminModel";
 import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
@@ -21,7 +22,7 @@ export const authOptions: NextAuthOptions = {
                     // Connect to database
                     await connect();
 
-                    // Find user by email
+                    // Find user by email (admins also authenticate through User table)
                     const user = await User.findOne({ email: credentials.email });
                     if (!user) {
                         throw new Error("Invalid email or password");
@@ -37,12 +38,17 @@ export const authOptions: NextAuthOptions = {
                         throw new Error("Invalid email or password");
                     }
 
+                    // Check if user is admin
+                    const admin = await Admin.findOne({ email: credentials.email });
+                    const role = admin ? "admin" : "user";
+
                     // Return user object (this will be available in session)
                     return {
                         id: user._id.toString(),
                         email: user.email,
                         name: user.name,
                         userId: user.userId || user.email,
+                        role: role,
                     };
                 } catch (error: any) {
                     throw new Error(error.message || "Authentication failed");
@@ -60,6 +66,7 @@ export const authOptions: NextAuthOptions = {
                 token.userId = (user as any).userId;
                 token.email = user.email;
                 token.name = user.name;
+                token.role = (user as any).role || "user";
             }
             return token;
         },
@@ -70,6 +77,7 @@ export const authOptions: NextAuthOptions = {
                     userId: token.userId as string,
                     email: token.email as string,
                     name: token.name as string,
+                    role: token.role as string,
                 };
             }
             return session;

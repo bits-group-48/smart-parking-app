@@ -18,13 +18,24 @@ export const Navbar = () => {
     await signOut({ callbackUrl: "/" });
   };
   
-  const navItems = [
-    { path: "/", label: "Home" },
-    { path: "/dashboard", label: "Dashboard" },
-    { path: "/parking", label: "Parking" },
-    { path: "/bookings", label: "My Bookings" },
-    { path: "/admin", label: "Admin" },
-  ];
+  // Filter nav items based on user role
+  const getNavItems = () => {
+    const baseItems = [
+      { path: "/", label: "Home" },
+      { path: "/dashboard", label: "Dashboard" },
+      { path: "/parking", label: "Parking" },
+      { path: "/bookings", label: "My Bookings" },
+    ];
+    
+    // Only show admin link if user is admin
+    if (session?.user?.role === "admin") {
+      baseItems.push({ path: "/admin", label: "Admin" });
+    }
+    
+    return baseItems;
+  };
+
+  const navItems = getNavItems();
 
   return (
     <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">

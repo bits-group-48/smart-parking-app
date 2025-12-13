@@ -1,14 +1,71 @@
+"use client"
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, Car, DollarSign, MapPin, Clock } from "lucide-react";
 
-const Bookings = () => {
-  const activeBookings = mockBookings.filter((b) => b.status === "active");
-  const completedBookings = mockBookings.filter((b) => b.status === "completed");
+export interface Booking {
+  id: string;
+  spotId: string;
+  slotNumber: string;
+  userId: string;
+  vehicleNumber: string;
+  startTime: string;
+  endTime: string;
+  duration: number; // hours
+  totalCost: number;
+  status: "active" | "completed" | "cancelled";
+}
 
-  const BookingCard = ({ booking }: { booking: typeof mockBookings[0] }) => (
+const Bookings = () => {
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check authentication
+    if (sessionStatus === "loading") return;
+    
+    if (!session?.user) {
+      router.push(`/auth?callbackUrl=${encodeURIComponent("/bookings")}`);
+      return;
+    }
+
+    // Fetch bookings
+    const fetchBookings = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await fetch("/api/bookings");
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to fetch bookings");
+        }
+
+        setBookings(data.data || []);
+      } catch (err: any) {
+        console.error("Error fetching bookings:", err);
+        setError(err.message || "Failed to load bookings");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, [session, sessionStatus, router]);
+
+  const activeBookings = bookings.filter((b) => b.status === "active");
+  const completedBookings = bookings.filter((b) => b.status === "completed");
+
+  const BookingCard = ({ booking }: { booking: Booking }) => (
     <Card className="shadow-card hover:shadow-elevated transition-shadow">
       <CardContent className="pt-6">
         <div className="flex items-start justify-between mb-4">
@@ -63,6 +120,27 @@ const Bookings = () => {
       </CardContent>
     </Card>
   );
+
+  if (sessionStatus === "loading" || isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading bookings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">  
@@ -132,60 +210,4 @@ const Bookings = () => {
   );
 };
 
-export interface Booking {
-  id: string;
-  spotId: string;
-  slotNumber: string;
-  userId: string;
-  vehicleNumber: string;
-  startTime: string;
-  endTime: string;
-  duration: number; // hours
-  totalCost: number;
-  status: "active" | "completed" | "cancelled";
-}
-
-export const mockBookings: Booking[] = [
-  {
-    id: "booking-1",
-    spotId: "spot-1a-1",
-    slotNumber: "A01",
-    userId: "user-1",
-    vehicleNumber: "ABC-1234",
-    startTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    duration: 4,
-    totalCost: 20,
-    status: "active",
-  },
-  {
-    id: "booking-2",
-    spotId: "spot-1b-5",
-    slotNumber: "B05",
-    userId: "user-1",
-    vehicleNumber: "XYZ-5678",
-    startTime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
-    duration: 4,
-    totalCost: 20,
-    status: "completed",
-  },
-  {
-    id: "booking-3",
-    spotId: "spot-2a-3",
-    slotNumber: "A03",
-    userId: "user-1",
-    vehicleNumber: "ABC-1234",
-    startTime: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 46 * 60 * 60 * 1000).toISOString(),
-    duration: 2,
-    totalCost: 8,
-    status: "completed",
-  },
-];
-
-
-
-
 export default Bookings;
-

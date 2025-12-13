@@ -27,7 +27,45 @@ const userSchema = new mongoose.Schema({
         type:String,
         required:[true,"Password is required" ]
     },
-    slots:[]
+    slots: [{
+        spotId: {
+            type: String,
+            required: true
+        },
+        slotNumber: {
+            type: String,
+            required: true
+        },
+        vehicleNumber: {
+            type: String,
+            required: true
+        },
+        startTime: {
+            type: Date,
+            required: true
+        },
+        endTime: {
+            type: Date,
+            required: true
+        },
+        duration: {
+            type: Number,
+            required: true // hours
+        },
+        totalCost: {
+            type: Number,
+            required: true
+        },
+        status: {
+            type: String,
+            enum: ["active", "completed", "cancelled"],
+            default: "active"
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, {
     timestamps: true // Adds createdAt and updatedAt fields automatically
 })

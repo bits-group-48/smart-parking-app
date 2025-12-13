@@ -7,6 +7,7 @@ import ParkingSpot from "./parking-spots";
 import { Search, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 export type ParkingStatus = "available" | "occupied" | "reserved";
 
@@ -31,6 +32,7 @@ const Parking = () => {
   const [parkingSpots, setParkingSpots] = useState<ParkingSpotType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
 
   // Fetch parking spots from API
   useEffect(() => {
@@ -64,7 +66,20 @@ const Parking = () => {
   });
 
   const handleBookSpot = (spot: ParkingSpotType) => {
+    // Check if user is authenticated
+    if (sessionStatus === "loading") {
+      return; // Wait for session to load
+    }
 
+    if (!session?.user) {
+      // Redirect to login with callback URL
+      const currentUrl = window.location.pathname;
+      navigate.push(`/auth?callbackUrl=${encodeURIComponent(currentUrl)}`);
+      toast.error("Please login to book a parking spot");
+      return;
+    }
+
+    // User is authenticated, proceed to booking page
     navigate.push(`/book/${spot.id}`);
   };
 
