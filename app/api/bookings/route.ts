@@ -9,7 +9,7 @@ import Parking from "@/schema/parkingModel";
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        
+
         if (!session?.user?.id) {
             return NextResponse.json(
                 { error: "Unauthorized" },
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         await connect();
 
         const user = await User.findById(session.user.id);
-        
+
         if (!user) {
             return NextResponse.json(
                 { error: "User not found" },
@@ -33,6 +33,21 @@ export async function GET(request: NextRequest) {
         const statusFilter = searchParams.get("status");
 
         let bookings = user.slots || [];
+
+        // Auto-complete bookings whose end time has passed (unless cancelled)
+        let didChange = false;
+        const now = new Date();
+        bookings.forEach((booking: any) => {
+            if (booking.status === "active" && booking.endTime && new Date(booking.endTime) < now) {
+                booking.status = "completed";
+                didChange = true;
+            }
+        });
+
+        // Persist status updates if any
+        if (didChange) {
+            await user.save();
+        }
 
         // Filter by status if provided
         if (statusFilter) {
@@ -74,7 +89,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        
+
         if (!session?.user?.id) {
             return NextResponse.json(
                 { error: "Unauthorized" },
@@ -97,7 +112,7 @@ export async function POST(request: NextRequest) {
 
         // Find parking spot
         const parkingSpot = await Parking.findById(spotId);
-        
+
         if (!parkingSpot) {
             return NextResponse.json(
                 { error: "Parking spot not found" },
@@ -115,7 +130,7 @@ export async function POST(request: NextRequest) {
 
         // Find user
         const user = await User.findById(session.user.id);
-        
+
         if (!user) {
             return NextResponse.json(
                 { error: "User not found" },
@@ -175,6 +190,101 @@ export async function POST(request: NextRequest) {
         console.error("Error creating booking:", error);
         return NextResponse.json(
             { error: error.message || "Failed to create booking" },
+            { status: 500 }
+        );
+    }
+}
+
+// PATCH - Cancel a booking
+export async function PATCH(request: NextRequest) {
+    try {
+        const session = await getServerSession(authOptions);
+
+        if (!session?.user?.id) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
+        const body = await request.json();
+        const { bookingId } = body;
+
+        if (!bookingId) {
+            return NextResponse.json(
+                { error: "bookingId is required" },
+                { status: 400 }
+            );
+        }
+
+        await connect();
+
+        const user = await User.findById(session.user.id);
+
+        if (!user) {
+            return NextResponse.json(
+                { error: "User not found" },
+                { status: 404 }
+            );
+        }
+
+        // Find booking subdocument by _id
+        const booking: any = user.slots.id(bookingId);
+
+        if (!booking) {
+            return NextResponse.json(
+                { error: "Booking not found" },
+                { status: 404 }
+            );
+        }
+
+        if (booking.status !== "active") {
+            return NextResponse.json(
+                { error: "Only active bookings can be cancelled" },
+                { status: 400 }
+            );
+        }
+
+        // Update booking status
+        booking.status = "cancelled";
+        await user.save();
+
+        // Free up the parking spot
+        if (booking.spotId) {
+            const parkingSpot = await Parking.findById(booking.spotId);
+            if (parkingSpot) {
+                parkingSpot.status = "available";
+                parkingSpot.userId = undefined;
+                await parkingSpot.save();
+            }
+        }
+
+        const formattedBooking = {
+            id: booking._id?.toString(),
+            spotId: booking.spotId,
+            slotNumber: booking.slotNumber,
+            userId: session.user.id,
+            vehicleNumber: booking.vehicleNumber,
+            startTime: booking.startTime ? new Date(booking.startTime).toISOString() : new Date().toISOString(),
+            endTime: booking.endTime ? new Date(booking.endTime).toISOString() : new Date().toISOString(),
+            duration: booking.duration,
+            totalCost: booking.totalCost,
+            status: booking.status,
+            createdAt: booking.createdAt ? new Date(booking.createdAt).toISOString() : new Date().toISOString(),
+        };
+
+        return NextResponse.json(
+            {
+                success: true,
+                message: "Booking cancelled successfully",
+                data: formattedBooking,
+            },
+            { status: 200 }
+        );
+    } catch (error: any) {
+        console.error("Error cancelling booking:", error);
+        return NextResponse.json(
+            { error: error.message || "Failed to cancel booking" },
             { status: 500 }
         );
     }

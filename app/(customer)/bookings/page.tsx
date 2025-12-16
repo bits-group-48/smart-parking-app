@@ -27,6 +27,7 @@ const Bookings = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     // Check authentication
@@ -64,6 +65,48 @@ const Bookings = () => {
 
   const activeBookings = bookings.filter((b) => b.status === "active");
   const completedBookings = bookings.filter((b) => b.status === "completed");
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!bookingId) return;
+
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this booking?"
+    );
+
+    if (!confirmCancel) return;
+
+    try {
+      setCancellingId(bookingId);
+
+      const response = await fetch("/api/bookings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookingId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to cancel booking");
+      }
+
+      // Update local state so UI reflects cancellation
+      setBookings((prev) =>
+        prev.map((booking) =>
+          booking.id === bookingId
+            ? { ...booking, status: "cancelled" }
+            : booking
+        )
+      );
+    } catch (err: any) {
+      console.error("Error cancelling booking:", err);
+      alert(err.message || "Failed to cancel booking");
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const BookingCard = ({ booking }: { booking: Booking }) => (
     <Card className="shadow-card hover:shadow-elevated transition-shadow">
@@ -109,11 +152,14 @@ const Bookings = () => {
 
         {booking.status === "active" && (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1">
-              Extend
-            </Button>
-            <Button variant="destructive" size="sm" className="flex-1">
-              Cancel
+            <Button
+              variant="destructive"
+              size="sm"
+              className="flex-1"
+              disabled={cancellingId === booking.id}
+              onClick={() => handleCancelBooking(booking.id)}
+            >
+              {cancellingId === booking.id ? "Cancelling..." : "Cancel"}
             </Button>
           </div>
         )}

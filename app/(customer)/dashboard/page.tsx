@@ -254,7 +254,7 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="grid md:grid-cols-3 gap-4">
+          <CardContent className="grid md:grid-cols-2 gap-4">
             <Button asChild className="h-24">
               <Link href="/parking" className="flex flex-col gap-2">
                 <MapPin className="h-6 w-6" />
@@ -265,12 +265,6 @@ const Dashboard = () => {
               <Link href="/bookings" className="flex flex-col gap-2">
                 <Clock className="h-6 w-6" />
                 <span>My Bookings</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-24">
-              <Link href="/profile" className="flex flex-col gap-2">
-                <Car className="h-6 w-6" />
-                <span>Profile</span>
               </Link>
             </Button>
           </CardContent>
